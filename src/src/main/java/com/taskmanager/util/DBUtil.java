@@ -8,44 +8,52 @@ import java.sql.SQLException;
 import java.util.Properties;
 
 public class DBUtil {
-    private static BasicDataSource dataSource;
+    private static final BasicDataSource dataSource = new BasicDataSource();
 
     static {
         try {
+            // 加载配置文件
             Properties props = new Properties();
-            InputStream input = DBUtil.class.getClassLoader().getResourceAsStream("db.properties");
-            props.load(input);
+            InputStream in = DBUtil.class.getClassLoader().getResourceAsStream("db.properties");
+            if (in == null) {
+                throw new RuntimeException("找不到数据库配置文件");
+            }
+            props.load(in);
+            in.close();
 
-            dataSource = new BasicDataSource();
-            dataSource.setDriverClassName(props.getProperty("db.driver"));
-            dataSource.setUrl(props.getProperty("db.url"));
-            dataSource.setUsername(props.getProperty("db.username"));
-            dataSource.setPassword(props.getProperty("db.password"));
+            // 配置数据源
+            String driver = props.getProperty("db.driver");
+            String url = props.getProperty("db.url");
+            String username = props.getProperty("db.username");
+            String password = props.getProperty("db.password");
 
-            // 连接池配置
-            dataSource.setInitialSize(Integer.parseInt(props.getProperty("db.initialSize")));
-            dataSource.setMaxTotal(Integer.parseInt(props.getProperty("db.maxTotal")));
-            dataSource.setMaxIdle(Integer.parseInt(props.getProperty("db.maxIdle")));
-            dataSource.setMinIdle(Integer.parseInt(props.getProperty("db.minIdle")));
-            dataSource.setMaxWaitMillis(Long.parseLong(props.getProperty("db.maxWaitMillis")));
+            if (driver == null || url == null || username == null || password == null) {
+                throw new RuntimeException("数据库配置信息不完整");
+            }
+
+            dataSource.setDriverClassName(driver);
+            dataSource.setUrl(url);
+            dataSource.setUsername(username);
+            dataSource.setPassword(password);
+
+            // 配置连接池
+            try {
+                dataSource.setInitialSize(Integer.parseInt(props.getProperty("db.initialSize", "5").trim()));
+                dataSource.setMaxTotal(Integer.parseInt(props.getProperty("db.maxActive", "20").trim()));
+                dataSource.setMaxIdle(Integer.parseInt(props.getProperty("db.maxIdle", "10").trim()));
+                dataSource.setMinIdle(Integer.parseInt(props.getProperty("db.minIdle", "5").trim()));
+                dataSource.setMaxWaitMillis(Long.parseLong(props.getProperty("db.maxWait", "30000").trim()));
+            } catch (NumberFormatException e) {
+                throw new RuntimeException("连接池配置参数格式错误: " + e.getMessage());
+            }
 
         } catch (Exception e) {
-            throw new RuntimeException("初始化数据库连接池失败", e);
+            throw new RuntimeException("初始化数据库连接池失败: " + e.getMessage(), e);
         }
     }
 
     public static Connection getConnection() throws SQLException {
         return dataSource.getConnection();
-    }
-
-    public static void closeConnection(Connection conn) {
-        if (conn != null) {
-            try {
-                conn.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
     }
 
     public static DataSource getDataSource() {
