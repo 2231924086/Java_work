@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人任务管理系统</title>
+    <!-- 引入Element Plus样式 -->
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <!-- 引入自定义样式 -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- 登录/注册表单 -->
+        <div v-if="!isLoggedIn" class="auth-container">
+            <el-card class="auth-card">
+                <template #header>
+                    <div class="card-header">
+                        <span>{{ isLogin ? '登录' : '注册' }}</span>
+                        <el-button link @click="toggleAuthMode">
+                            {{ isLogin ? '没有账号？去注册' : '已有账号？去登录' }}
+                        </el-button>
+                    </div>
+                </template>
+                
+                <!-- 登录表单 -->
+                <el-form v-if="isLogin" :model="loginForm" :rules="loginRules" ref="loginFormRef" label-width="80px">
+                    <el-form-item label="用户名" prop="username">
+                        <el-input v-model="loginForm.username" placeholder="请输入用户名"></el-input>
+                    </el-form-item>
+                    <el-form-item label="密码" prop="password">
+                        <el-input v-model="loginForm.password" type="password" placeholder="请输入密码"></el-input>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-button type="primary" @click="handleLogin" :loading="loading">登录</el-button>
+                    </el-form-item>
+                </el-form>
+
+                <!-- 注册表单 -->
+                <el-form v-else :model="registerForm" :rules="registerRules" ref="registerFormRef" label-width="80px">
+                    <el-form-item label="用户名" prop="username">
+                        <el-input v-model="registerForm.username" placeholder="请输入用户名"></el-input>
+                    </el-form-item>
+                    <el-form-item label="密码" prop="password">
+                        <el-input v-model="registerForm.password" type="password" placeholder="请输入密码"></el-input>
+                    </el-form-item>
+                    <el-form-item label="确认密码" prop="confirmPassword">
+                        <el-input v-model="registerForm.confirmPassword" type="password" placeholder="请确认密码"></el-input>
+                    </el-form-item>
+                    <el-form-item label="邮箱" prop="email">
+                        <el-input v-model="registerForm.email" placeholder="请输入邮箱"></el-input>
+                    </el-form-item>
+                    <el-form-item label="手机号" prop="phone">
+                        <el-input v-model="registerForm.phone" placeholder="请输入手机号"></el-input>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-button type="primary" @click="handleRegister" :loading="loading">注册</el-button>
+                    </el-form-item>
+                </el-form>
+            </el-card>
+        </div>
+
+        <!-- 主应用界面 -->
+        <div v-else class="app-container">
+            <!-- 顶部导航栏 -->
+            <el-header class="app-header">
+                <div class="header-left">
+                    <h2>个人任务管理系统</h2>
+                </div>
+                <div class="header-right">
+                    <el-dropdown @command="handleCommand">
+                        <span class="user-info">
+                            {{ currentUser.username }}
+                            <el-icon><arrow-down /></el-icon>
+                        </span>
+                        <template #dropdown>
+                            <el-dropdown-menu>
+                                <el-dropdown-item command="profile">个人信息</el-dropdown-item>
+                                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+                            </el-dropdown-menu>
+                        </template>
+                    </el-dropdown>
+                </div>
+            </el-header>
+
+            <!-- 主要内容区域 -->
+            <el-container class="main-container">
+                <!-- 左侧边栏 -->
+                <el-aside width="200px">
+                    <el-menu
+                        :default-active="activeMenu"
+                        class="side-menu"
+                        @select="handleMenuSelect">
+                        <el-menu-item index="tasks">
+                            <el-icon><list /></el-icon>
+                            <span>任务列表</span>
+                        </el-menu-item>
+                        <el-menu-item index="categories">
+                            <el-icon><folder /></el-icon>
+                            <span>分类管理</span>
+                        </el-menu-item>
+                        <el-menu-item index="upcoming">
+                            <el-icon><calendar /></el-icon>
+                            <span>即将到期</span>
+                        </el-menu-item>
+                    </el-menu>
+                </el-aside>
+
+                <!-- 右侧内容区 -->
+                <el-main>
+                    <!-- 任务列表组件 -->
+                    <task-list v-if="activeMenu === 'tasks'"
+                        :tasks="tasks"
+                        :categories="categories"
+                        @refresh="loadTasks"
+                        @update="handleTaskUpdate"
+                        @delete="handleTaskDelete">
+                    </task-list>
+
+                    <!-- 分类管理组件 -->
+                    <category-manager v-if="activeMenu === 'categories'"
+                        :categories="categories"
+                        @refresh="loadCategories"
+                        @update="handleCategoryUpdate"
+                        @delete="handleCategoryDelete">
+                    </category-manager>
+
+                    <!-- 即将到期任务组件 -->
+                    <upcoming-tasks v-if="activeMenu === 'upcoming'"
+                        :tasks="upcomingTasks"
+                        @refresh="loadUpcomingTasks">
+                    </upcoming-tasks>
+                </el-main>
+            </el-container>
+        </div>
+
+        <!-- 个人信息对话框 -->
+        <el-dialog v-model="profileDialogVisible" title="个人信息" width="500px">
+            <el-form :model="profileForm" :rules="profileRules" ref="profileFormRef" label-width="100px">
+                <el-form-item label="用户名">
+                    <el-input v-model="profileForm.username" disabled></el-input>
+                </el-form-item>
+                <el-form-item label="邮箱" prop="email">
+                    <el-input v-model="profileForm.email"></el-input>
+                </el-form-item>
+                <el-form-item label="手机号" prop="phone">
+                    <el-input v-model="profileForm.phone"></el-input>
+                </el-form-item>
+                <el-form-item label="新密码" prop="newPassword">
+                    <el-input v-model="profileForm.newPassword" type="password"></el-input>
+                </el-form-item>
+                <el-form-item label="确认密码" prop="confirmPassword">
+                    <el-input v-model="profileForm.confirmPassword" type="password"></el-input>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="profileDialogVisible = false">取消</el-button>
+                    <el-button type="primary" @click="handleProfileUpdate" :loading="loading">
+                        保存
+                    </el-button>
+                </span>
+            </template>
+        </el-dialog>
+    </div>
+
+    <!-- 引入Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- 引入Element Plus -->
+    <script src="https://unpkg.com/element-plus"></script>
+    <!-- 引入Element Plus图标 -->
+    <script src="https://unpkg.com/@element-plus/icons-vue"></script>
+    <!-- 引入axios -->
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <!-- 引入自定义组件和脚本 -->
+    <script src="js/components.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html> 
