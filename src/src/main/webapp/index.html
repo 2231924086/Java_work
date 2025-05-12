@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务管理系统 - 首页</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Microsoft YaHei', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            background-color: #2196F3;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+        }
+        
+        .username {
+            margin-right: 15px;
+        }
+        
+        .logout-btn {
+            background-color: transparent;
+            color: white;
+            border: 1px solid white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background-color: white;
+            color: #2196F3;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        
+        .welcome-card {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .welcome-title {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .stats-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .stat-card {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            flex: 1;
+            min-width: 200px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 36px;
+            font-weight: bold;
+            color: #2196F3;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 16px;
+        }
+        
+        .loading-container {
+            display: flex;
+            justify-content: center;
+            padding: 40px;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(33, 150, 243, 0.3);
+            border-radius: 50%;
+            border-top-color: #2196F3;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .error-message {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .not-logged-in {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .login-link {
+            display: inline-block;
+            margin-top: 20px;
+            background-color: #2196F3;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+        
+        .login-link:hover {
+            background-color: #0d8aee;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">任务管理系统</div>
+        <div class="user-info">
+            <span class="username" id="username">加载中...</span>
+            <button class="logout-btn" id="logout-btn">退出登录</button>
+        </div>
+    </div>
+    
+    <div class="container" id="main-container">
+        <div class="loading-container" id="loading-container">
+            <div class="loading-spinner"></div>
+        </div>
+    </div>
+    
+    <script>
+        // 页面加载完成后检查登录状态
+        document.addEventListener('DOMContentLoaded', checkLoginStatus);
+        
+        // 退出登录按钮
+        document.getElementById('logout-btn').addEventListener('click', logout);
+        
+        // 检查登录状态
+        async function checkLoginStatus() {
+            try {
+                const response = await fetch('/api/user/info');
+                const data = await response.json();
+                
+                // 隐藏加载动画
+                document.getElementById('loading-container').style.display = 'none';
+                
+                if (data.success) {
+                    // 用户已登录
+                    document.getElementById('username').textContent = data.user.username;
+                    showDashboard(data.user);
+                } else {
+                    // 用户未登录
+                    showNotLoggedIn();
+                }
+            } catch (error) {
+                console.error('获取用户信息出错:', error);
+                document.getElementById('loading-container').style.display = 'none';
+                showError('获取用户信息失败，请刷新页面或重新登录');
+            }
+        }
+        
+        // 显示仪表盘
+        async function showDashboard(user) {
+            const mainContainer = document.getElementById('main-container');
+            
+            // 获取任务统计数据
+            let pendingTaskCount = 0;
+            let completedTaskCount = 0;
+            
+            try {
+                const pendingResponse = await fetch('/api/task/count?status=0');
+                const pendingData = await pendingResponse.json();
+                if (pendingData.success) {
+                    pendingTaskCount = pendingData.count;
+                }
+                
+                const completedResponse = await fetch('/api/task/count?status=1');
+                const completedData = await completedResponse.json();
+                if (completedData.success) {
+                    completedTaskCount = completedData.count;
+                }
+            } catch (error) {
+                console.error('获取任务统计出错:', error);
+            }
+            
+            // 创建欢迎卡片
+            const welcomeHtml = `
+                <div class="welcome-card">
+                    <h1 class="welcome-title">欢迎回来，${user.username}！</h1>
+                    <p>这是您的个人任务管理中心，您可以创建、管理和跟踪您的任务。</p>
+                </div>
+                
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <div class="stat-value">${pendingTaskCount}</div>
+                        <div class="stat-label">待办任务</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${completedTaskCount}</div>
+                        <div class="stat-label">已完成任务</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${pendingTaskCount + completedTaskCount}</div>
+                        <div class="stat-label">总任务数</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <p>点击下方按钮开始管理您的任务：</p>
+                    <div style="margin-top: 20px;">
+                        <a href="task-list.html" style="display: inline-block; background-color: #2196F3; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; font-weight: 600; margin: 0 10px; transition: background-color 0.3s;">查看所有任务</a>
+                        <a href="task-add.html" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; font-weight: 600; margin: 0 10px; transition: background-color 0.3s;">创建新任务</a>
+                        <a href="category-list.html" style="display: inline-block; background-color: #FF9800; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; font-weight: 600; margin: 0 10px; transition: background-color 0.3s;">管理任务分类</a>
+                    </div>
+                </div>
+            `;
+            
+            mainContainer.innerHTML = welcomeHtml;
+        }
+        
+        // 显示未登录状态
+        function showNotLoggedIn() {
+            const mainContainer = document.getElementById('main-container');
+            
+            // 隐藏用户信息
+            document.querySelector('.user-info').style.display = 'none';
+            
+            mainContainer.innerHTML = `
+                <div class="not-logged-in">
+                    <h2>您尚未登录</h2>
+                    <p>请登录后使用任务管理系统的功能</p>
+                    <a href="login.html" class="login-link">前往登录</a>
+                </div>
+            `;
+        }
+        
+        // 显示错误信息
+        function showError(message) {
+            const mainContainer = document.getElementById('main-container');
+            
+            mainContainer.innerHTML = `
+                <div class="error-message">
+                    ${message}
+                </div>
+                <div style="text-align: center; margin-top: 20px;">
+                    <a href="login.html" class="login-link">返回登录页面</a>
+                </div>
+            `;
+        }
+        
+        // 退出登录
+        async function logout() {
+            try {
+                const response = await fetch('/api/user/logout', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 退出成功，重定向到登录页
+                    window.location.href = 'login.html';
+                } else {
+                    alert('退出失败: ' + data.message);
+                }
+            } catch (error) {
+                console.error('退出登录出错:', error);
+                alert('退出请求失败，请稍后再试');
+            }
+        }
+    </script>
+</body>
+</html>
